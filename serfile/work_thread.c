@@ -22,7 +22,7 @@ void * work_fun(void *arg)
 
 void start_thread(int c)
 {
-	phread_t id;
+	pthread_t id;
 	if(pthread_create(&id,NULL,work_fun,(void *)c) !=0)
 	{
 		close(c);
