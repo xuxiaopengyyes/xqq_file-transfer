@@ -5,7 +5,7 @@ void * work_fun(void *arg)
 	int c=(int) arg;
 	while(1)
 	{
-		char buff[128}={0};
+		char buff[128]={0};
 		int num =recv(c,buff,127,0);
 		if(num<0)
 		{
@@ -14,7 +14,7 @@ void * work_fun(void *arg)
 
 		//测试
 		printf("%s",buff);
-		send("ok",2);	
+	    send(c,"ok",2,0);	
 	
 		//测试
 	}
