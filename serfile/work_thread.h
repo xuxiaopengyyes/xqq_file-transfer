@@ -10,6 +10,7 @@
 #include<netinet/in.h>
 #include<fcntl.h>
 
+//给一个套接字去新线程执行
 void start_thread(int c);
 
 
