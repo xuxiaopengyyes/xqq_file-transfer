@@ -87,11 +87,103 @@ void recv_file(int c, char* myargv[])
         strcat(filename,UNDONE);
 
         //打开（创建目标文件），获取文件偏移
+        int fd = open(filename, O_WRONLY);
+        int offset = 0;
+        if (fd == -1)
+        {
+            fd = open(filename, O_WRONLY | O_CREAT, 0600);
+            if (fd == -1)
+            {
+             send(c, "err", 3, 0);
+            }
+        }
+        else
+        {
+            offset = lseek(fd, 0, SEEK_END);//获取文件大小
+        }
 
+        //发送偏移
+        char send_status[128] = {"ok#"};
+        sprintf(send_status + 3, "%d", offset);//发送段插入偏移
+        send(c, send_status, strlen(send_status), 0);
 
-    }
+        //文件大小
+        long long filesize = atoll(myargv[2]);
 
+        long long curr_file = offset;
+        int num = 0;
+        char data[1024] = {0};
+        bool tag = true;
+        printf("%lld\n", filesize);
+        while (true)
+        {
+            num = recv(c, data, 1024, 0);
+            if (num <= 0)
+            {
+                //printf("ser close\n");
+                break;
+            }
+            write(fd, data, num);
+            curr_file += num;
 
+            if (curr_file >= filesize)
+            {
+                break;
+            }
+        }
+        printf("%lld\n", curr_file);
+
+        //校验：重新打开文件，获取md5值
+        close(fd);
+        fd = open(filename, O_RDONLY);
+        if (fd == -1)
+        {
+            send(c, FILE_OPEN_ERR, strlen(FILE_OPEN_ERR), 0);
+        }
+        lseek(fd, 0, SEEK_SET);
+
+        //获取md5值
+        unsigned char md[MD5_LEN + 1] = {0};
+        fun_md5(fd, md);
+        print_md5(md);
+        char md5[MD5_LEN * 2 + 1] = {0};
+        md5_to_char(md, md5);
+        printf("%s\n", md5);
+        if (strcmp(md5, myargv[3]) != 0)
+        {
+            send(c, ERR, strlen(ERR), 0);
+            return;
+        }
+
+        //校验完成，返回
+        send(c, "ok#", strlen("ok#"), 0);
+
+        //对文件名进行处理
+        pid_t pid = fork();
+        if (pid == -1)
+        {
+            exit(1);
+        }
+
+        char cmd[128] = {"mv "};
+        strcat(cmd, filename);
+        strcat(cmd, " ");
+        strcat(cmd, myargv[1]);
+        char* tmpargv[10] = {0};
+        char* index = NULL;
+        tmpargv[0] = strtok_r(cmd, " ", &index);
+        int i = 0;
+        while (tmpargv[i] != 0)
+        {
+            tmpargv[++i] = strtok_r(NULL, " ", &index);
+        }
+        if (pid == 0)
+        {
+            execvp(tmpargv[0], tmpargv);
+            exit(1);
+        }
+        saveMD5_in_Sql(myargv[1], md5);
+        close(fd);
 
 }
 
