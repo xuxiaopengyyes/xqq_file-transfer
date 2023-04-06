@@ -13,8 +13,13 @@
 
 #define ERR "err"
 #define PIPE_ERR "err pipe"
-#define FORK_ERR "err "
-#define NO_FILENAME ""
+#define FORK_ERR "err fork"
+#define NO_FILENAME "err nofilename"
+#define FILE_OPEN_ERR "err file open"
+#define UNDOWN ".tmp"
+#define SQL_ERR "err sql"
+#define FILE_EXIST "exist"
+
 
 char* get_cmd(char buff[],char* myargv[])
 {
@@ -33,6 +38,122 @@ char* get_cmd(char buff[],char* myargv[])
     }
     return myargv[0];
 }
+
+void run_cmd(int c, char* cmd, char* myargv[])
+{
+    if(cmd == NULL || myargv == NULL)
+    {
+        return ;
+    }
+
+    int pipefd[2];
+    if(pipe(pipefd) == -1)
+    {
+        send(c, PIPE_ERR, strlen(PIPE_ERR), 0);
+        return ;
+    }
+    pid_t pid = fork();
+    if(pid == -1)
+    {
+        send(c, FORK_ERR, strlen(FORK_ERR), 0);
+        return ;
+    }
+    if(pid == 0)
+    {
+        //关闭读端
+        close(pipefd[0]);
+        //将stdout,stderr重定向到管道写端
+        dup2(pipefd[1],1);
+        dup2(pipefd[1],2);
+        execvp(cmd, myargv);
+        printf("cmd:%s not found\n", cmd);
+        exit(0);
+    }
+    close(pipe[1]);
+
+    char red_pipe[4096] = {"ok#"};
+    wait(NULL);
+    read(pipefd[0], read_pipe + 3,4092);
+    send(c, read_pipe, strlen(read_pipe), 0);
+}
+
+void fun_md5(int fd, unsigned char* md)
+{
+    MD5_CTX ctx;
+    MD5_Init(&ctx);
+
+    unsigned long len = 0;
+    char buff[ BUFF_SIZE ];
+    while( (len = read(fd, buff, BUFF_SIZE )) > 0)
+    {
+        MD5_Update(&ctx, buff, len);
+    }
+
+    MD5_Final(md,&ctx);
+}
+
+void md5_to_char(unsigend char md[], char* md5)
+{
+    for(int i = 0;i < MD5_LEN; i++)
+    {
+        sprintf(md5 + i * 2, "%02x", md[i]);
+    }
+
+}
+
+void printf_md5(unsigned char md[])
+{
+    int i = 0;
+    for(;i < MD5_LEN; i++)
+    {
+        printf("%02x",md[i]);
+    }
+    printf("\n");
+}
+
+MYSQL_RES* dosql(const char* sql)
+{
+    if(sql == NULL)
+    {
+        return NULL;
+    }
+
+    MYSQL mysql_con;
+    MYSQL* mysql = mysql_init(&mysql_con);
+    if(mysql == NULL)
+    {
+        printf("mysql init err\n");
+        return NULL;
+    }
+
+    mysql = mysql_real_connect(mysql, "losthost", "root", "123456", "md5", 3306, NULL, 0);
+    if(mysql == NULL)
+    {
+        printf("connect mysql faild\n");
+        return NULL;
+    }
+
+
+    int query_res = mysql_query(mysql, sql);
+    if(query_res != 0)
+    {
+        printf("query err: %s\n",mysql_error(mysql));
+        mysql_close(mysql);
+        return NULL;
+    }
+
+    MYSQL_RES* mysql_res = mysql_store_result(mysql);
+    if(mysql_res == NULL)
+    {
+        mysql_close(mysql);
+        return NULL;
+    }
+
+    mysql_close(mysql);
+    return mysql_res;
+}
+
+
 
 void recv_file(int c, char* myargv[])
 {
